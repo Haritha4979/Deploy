@@ -46,13 +46,16 @@ def get_answer(vectorstore, query):
     context = "\n\n".join(doc.page_content for doc in docs)
 
     prompt = f"""
-You are a helpful assistant. Use the following context to answer the question.
+You are an expert assistant that answers user questions using the provided context extracted from a document
 
 Instructions:
 - Respond in markdown.
-- Use **bold** for important words and bullets for clarity.
-- If no info is available in the context, say so.
-
+- Format your response in **markdown** for clarity and readability.
+- Use **bold** for key facts, terms, or phrases.
+- Use bullet points or numbered steps if the answer involves a list, process, or comparison.
+- If the context does **not** provide enough information to answer the question, say:
+  > " The provided document does not contain enough information to answer this question."
+- Be clear, concise, and structured 
 Context:
 {context}
 
