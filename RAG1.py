@@ -1,9 +1,8 @@
 import os
-import asyncio
 import streamlit as st
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma  
+from langchain_community.vectorstores import Chroma  # ✅ Updated import as per warning
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from docx import Document
 
@@ -36,15 +35,7 @@ def create_vectorstore(docs):
 # --- RAG Query --- #
 def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
-
-    # ✅ Fix: Manually create event loop if missing
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-    docs = loop.run_until_complete(retriever.ainvoke(query))  # use ainvoke async-safe
+    docs = retriever.invoke(query)  # ✅ Use synchronous invoke to avoid event loop errors
 
     context = "\n\n".join([doc.page_content for doc in docs])
     prompt = f"""
@@ -70,13 +61,13 @@ Question:
 
 # --- Streamlit UI --- #
 st.set_page_config(page_title="📄 Chat with FAST Document", layout="centered")
-st.title("📄 Chat with document")
+st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
 
 # --- Load document and create vectorstore only once --- #
 if "vectordb" not in st.session_state:
     try:
         file_dir = os.path.dirname(os.path.abspath(__file__))
-        filepath = os.path.join(file_dir, "FAST_Workshop.docx")
+        filepath = os.path.join(file_dir, "FAST_Workshop.docx")  # ✅ Local file in same repo
 
         text = load_docx_from_path(filepath)
 
