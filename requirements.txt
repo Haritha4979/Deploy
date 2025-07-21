@@ -1,9 +1,8 @@
-langchain==0.1.16
-langchain-google-genai==1.0.2
+openai
+langchain
 langchain-community
-faiss-cpu
+streamlit
 python-dotenv
-pandas
 PyPDF2
 python-docx
-chromadb
+faiss-cpu
