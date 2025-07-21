@@ -8,8 +8,8 @@ from docx import Document
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import AzureOpenAIEmbeddings
-from langchain.chat_models import AzureChatOpenAI
+from langchain_openai import AzureOpenAIEmbeddings
+from langchain_community.chat_models import AzureChatOpenAI
 from google.api_core.exceptions import ResourceExhausted
 
 nest_asyncio.apply()
