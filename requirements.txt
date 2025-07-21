@@ -1,9 +1,10 @@
-openai
-langchain
-langchain-community
+
+
 streamlit
 python-dotenv
 PyPDF2
-python-docx
-faiss-cpu
-tiktoken
+pandas
+docx
+langchain
+langchain-community
+langchain-google-genai
