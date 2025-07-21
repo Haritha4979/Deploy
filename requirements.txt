@@ -6,4 +6,4 @@ sentence-transformers
 faiss-cpu
 docx2txt
 python-docx
-nest_asyncio
+nest_asyncio  
