@@ -3,17 +3,20 @@ import streamlit as st
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.chat_models import AzureChatOpenAI
 
 from docx import Document
 import PyPDF2
 
-# --- Load API Key ---
+# --- Load API Keys ---
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT") or st.secrets.get("AZURE_OPENAI_ENDPOINT")
+AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY") or st.secrets.get("AZURE_OPENAI_KEY")
+AZURE_OPENAI_MODEL = os.getenv("AZURE_OPENAI_MODEL") or st.secrets.get("AZURE_OPENAI_MODEL")
 
-if not GEMINI_API_KEY:
-    st.error("❌ Google Gemini API Key missing. Add it to .env or Streamlit Secrets.")
+if not AZURE_OPENAI_KEY or not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_MODEL:
+    st.error("❌ Azure OpenAI credentials missing. Add them to .env or Streamlit Secrets.")
     st.stop()
 
 # --- File Loaders ---
@@ -32,11 +35,14 @@ def split_text(text):
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     return splitter.create_documents([text])
 
-# --- Vectorstore with Gemini Embeddings ---
+# --- Vectorstore with Azure OpenAI Embeddings ---
 def create_vectorstore(docs):
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001",
-        google_api_key=GEMINI_API_KEY
+    embeddings = OpenAIEmbeddings(
+        openai_api_type="azure",
+        openai_api_key=AZURE_OPENAI_KEY,
+        openai_api_base=AZURE_OPENAI_ENDPOINT,
+        openai_api_version="2024-05-13",
+        deployment=AZURE_OPENAI_MODEL,
     )
     return FAISS.from_documents(docs, embeddings)
 
@@ -60,16 +66,18 @@ Context:
 Question:
 {query}
 """
-    model = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
-        google_api_key=GEMINI_API_KEY
+    model = AzureChatOpenAI(
+        deployment_name=AZURE_OPENAI_MODEL,
+        openai_api_key=AZURE_OPENAI_KEY,
+        openai_api_base=AZURE_OPENAI_ENDPOINT,
+        openai_api_version="2024-05-13",
     )
     response = model.invoke(prompt)
     return response.content
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="📄 Chat with Your Document", layout="centered")
-st.title("📄 Chat with Your Document using Gemini")
+st.title("📄 Chat with Your Document using Azure GPT-4o-mini")
 
 # --- Reset Option ---
 if st.button("🔁 Upload another file", key="reset_file"):
