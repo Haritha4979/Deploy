@@ -3,26 +3,30 @@ import streamlit as st
 from dotenv import load_dotenv
 import asyncio
 import nest_asyncio
+import time
+from docx import Document
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from docx import Document
+from langchain_community.embeddings import AzureOpenAIEmbeddings
+from langchain.chat_models import AzureChatOpenAI
+from google.api_core.exceptions import ResourceExhausted
 
 nest_asyncio.apply()
-
 try:
     asyncio.get_event_loop()
 except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-# --- Load Gemini API Key --- #
+# --- Load Azure OpenAI credentials --- #
 load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT") or st.secrets.get("AZURE_OPENAI_ENDPOINT")
+AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY") or st.secrets.get("AZURE_OPENAI_KEY")
+AZURE_OPENAI_MODEL = os.getenv("AZURE_OPENAI_MODEL") or st.secrets.get("AZURE_OPENAI_MODEL", "gpt-4o-mini")
 
-if not GOOGLE_API_KEY:
-    st.error("❌ Google API Key missing in .env or Streamlit Secrets.")
+if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_KEY:
+    st.error("❌ Azure OpenAI credentials missing in .env or Streamlit Secrets.")
     st.stop()
 
 # --- Load DOCX from local path --- #
@@ -37,9 +41,10 @@ def split_text(text):
 
 # --- Vectorstore from docs --- #
 def create_vectorstore(docs):
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001",
-        google_api_key=GOOGLE_API_KEY
+    embeddings = AzureOpenAIEmbeddings(
+        azure_endpoint=AZURE_OPENAI_ENDPOINT,
+        api_key=AZURE_OPENAI_KEY,
+        deployment=AZURE_OPENAI_MODEL
     )
     return FAISS.from_documents(docs, embedding=embeddings)
 
@@ -50,16 +55,12 @@ def get_answer(vectorstore, query):
 
     context = "\n\n".join([doc.page_content for doc in docs])
     prompt = f"""
-You are a helpful and knowledgeable assistant. Use the provided context to answer the user’s question accurately and clearly.
+You are a helpful assistant. Use the context below to answer the user's question.
 
 Instructions:
-- Always base your answer strictly on the given context. Do not include external or fabricated information.
-- Format your answer using **markdown**.
-- Highlight important points using **bold**.
-- Use bullet points or numbered steps if it improves clarity.
-- Be concise but informative.
-- If the context is insufficient to answer, state clearly: "The provided context does not contain enough information to answer the question."
-
+- Write clearly in markdown.
+- Use **bold** for key points and bullets or numbers where useful.
+- Keep answers concise and grounded in the document.
 
 Context:
 {context}
@@ -67,16 +68,27 @@ Context:
 Question:
 {query}
 """
-    model = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
-        google_api_key=GOOGLE_API_KEY
+    model = AzureChatOpenAI(
+        openai_api_key=AZURE_OPENAI_KEY,
+        azure_endpoint=AZURE_OPENAI_ENDPOINT,
+        deployment_name=AZURE_OPENAI_MODEL,
+        api_version="2024-02-15-preview"
     )
-    response = model.invoke(prompt)
+
+    try:
+        response = model.invoke(prompt)
+    except ResourceExhausted as e:
+        if "quota" in str(e):
+            time.sleep(11)
+            response = model.invoke(prompt)
+        else:
+            raise e
+
     return response.content
 
 # --- Streamlit UI --- #
 st.set_page_config(page_title="📄 Chat with FAST Document", layout="centered")
-st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
+st.title("📄 Chat with FAST_Workshop.docx (Azure OpenAI RAG)")
 
 # --- Load document and create vectorstore only once --- #
 if "vectordb" not in st.session_state:
