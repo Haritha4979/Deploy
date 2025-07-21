@@ -66,7 +66,7 @@ Question:
 {query}
 """
 
-    model = genai.GenerativeModel("gemini-pro")
+    model = genai.GenerativeModel("gemini-1.0-pro")
     response = model.generate_content(prompt)
     return response.text
 
