@@ -1,9 +1,8 @@
-
 import os
 import streamlit as st
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores import FAISS
+from langchain.vectorstores import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 
 from docx import Document
@@ -35,13 +34,13 @@ def split_text(text):
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     return splitter.create_documents([text])
 
-# Create vectorstore 
+# Create vectorstore using Chroma
 def create_vectorstore(docs):
     embeddings = GoogleGenerativeAIEmbeddings(
         model="models/embedding-001",
         google_api_key=GEMINI_API_KEY
     )
-    return FAISS.from_documents(docs, embeddings)
+    return Chroma.from_documents(docs, embeddings, collection_name="doc_collection")
 
 #  RAG Q&A  
 def get_answer(vectorstore, query):
@@ -129,4 +128,4 @@ if "vectordb" in st.session_state:
                     st.markdown(answer)
                     st.session_state.chat_history.append({"role": "assistant", "content": answer})
                 except Exception as e:
-                    st.error(f"Error: {e}") 
+                    st.error(f"Error: {e}")
