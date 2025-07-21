@@ -1,4 +1,5 @@
 import os
+import asyncio
 import streamlit as st
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -32,12 +33,18 @@ def create_vectorstore(docs):
     )
     return Chroma.from_documents(docs, embeddings, collection_name="doc_collection")
 
-import asyncio
-
 # --- RAG Query --- #
 def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
-    docs = retriever.invoke(query)
+
+    # ✅ Fix: Manually create event loop if missing
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    docs = loop.run_until_complete(retriever.ainvoke(query))  # use ainvoke async-safe
 
     context = "\n\n".join([doc.page_content for doc in docs])
     prompt = f"""
@@ -68,7 +75,6 @@ st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
 # --- Load document and create vectorstore only once --- #
 if "vectordb" not in st.session_state:
     try:
-        # Safe absolute path to the document
         file_dir = os.path.dirname(os.path.abspath(__file__))
         filepath = os.path.join(file_dir, "FAST_Workshop.docx")
 
