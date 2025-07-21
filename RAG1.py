@@ -35,14 +35,17 @@ def load_docx_from_path(path):
     return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
 
 # --- Split text into chunks --- #
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
 def split_text(text):
-    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-        encoding_name="cl100k_base",  # or "gpt2" if you prefer
+    splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
-        chunk_overlap=200
+        chunk_overlap=200,
+        separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""]
     )
     docs = splitter.create_documents([text])
     return [doc.page_content for doc in docs]
+
 
 # --- Vectorstore from docs --- #
 def create_vectorstore(texts):
