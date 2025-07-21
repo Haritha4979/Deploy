@@ -36,8 +36,9 @@ def load_docx_from_path(path):
 
 # --- Split text into chunks --- #
 def split_text(text):
-    splitter = RecursiveCharacterTextSplitter()
-    return splitter.split_text(text)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    docs = splitter.create_documents([text])
+    return [doc.page_content for doc in docs]
 
 # --- Vectorstore from docs --- #
 def create_vectorstore(texts):
