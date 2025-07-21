@@ -6,3 +6,4 @@ python-dotenv
 PyPDF2
 python-docx
 faiss-cpu
+tiktoken
