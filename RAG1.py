@@ -20,7 +20,7 @@ except RuntimeError:
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
-    st.error(" Google API Key missing in .env or Streamlit secrets.")
+    st.error("❌ Google API Key missing in .env or Streamlit secrets.")
     st.stop()
 
 # --- Load built-in docx
@@ -46,17 +46,15 @@ def get_answer(vectorstore, query):
     context = "\n\n".join(doc.page_content for doc in docs)
 
     prompt = f"""
-You are an expert assistant that answers user questions using the provided context extracted from a document.
+ You are an expert assistant that answers user questions using the provided context extracted from a document
 
 Instructions:
 - Respond in markdown.
-- Format your response in **markdown** for clarity and readability.
-- Use **bold** for key facts, terms, or phrases.
-- Use bullet points or numbered steps if the answer involves a list, process, or comparison.
+- Use **bold** for important words and bullets for clarity.
+-  Keep your answer clear, concise, and helpful.
 - If the context does **not** provide enough information to answer the question, say:
   > " The provided document does not contain enough information to answer this question."
-- Be clear, concise, and structured to help the user understand the answer.
-
+- Be clear, concise, and structured
 Context:
 {context}
 
@@ -67,8 +65,8 @@ Question:
     return model.invoke(prompt).content
 
 # --- Streamlit UI
-st.set_page_config(page_title=" Chatbot", layout="centered")
-st.title(" Chat with Document")
+st.set_page_config(page_title="📄 Gemini RAG Chatbot", layout="centered")
+st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
 
 if "vectordb" not in st.session_state:
     try:
@@ -79,7 +77,7 @@ if "vectordb" not in st.session_state:
         docs = split_text(text)
         st.session_state.vectordb = create_vectorstore(docs)
         st.session_state.chat_history = []
-        st.success("loaded.")
+        st.success("✅ Document loaded successfully.")
     except Exception as e:
         st.error(f"Error loading document: {e}")
         st.stop()
