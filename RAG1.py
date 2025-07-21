@@ -1,8 +1,9 @@
 import os
+import asyncio
 import streamlit as st
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma  # ✅ Updated import as per warning
+from langchain_community.vectorstores import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from docx import Document
 
@@ -11,8 +12,17 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 if not GOOGLE_API_KEY:
-    st.error("❌ Google API Key missing in .env or Streamlit Secrets.")
+    st.error("Google API Key missing in .env or Streamlit Secrets.")
     st.stop()
+
+# --- Async-safe wrapper --- #
+def safe_invoke(coro):
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(coro)
 
 # --- Load DOCX from local path --- #
 def load_docx_from_path(path):
@@ -35,7 +45,7 @@ def create_vectorstore(docs):
 # --- RAG Query --- #
 def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
-    docs = retriever.invoke(query)  # ✅ Use synchronous invoke to avoid event loop errors
+    docs = retriever.invoke(query)
 
     context = "\n\n".join([doc.page_content for doc in docs])
     prompt = f"""
@@ -56,18 +66,18 @@ Question:
         model="gemini-pro",
         google_api_key=GOOGLE_API_KEY
     )
-    response = model.invoke(prompt)
+    response = safe_invoke(model.ainvoke(prompt))  
     return response.content
 
 # --- Streamlit UI --- #
-st.set_page_config(page_title="📄 Chat with FAST Document", layout="centered")
-st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
+st.set_page_config(page_title=" Chat with  Document", layout="centered")
+st.title(" Chat with document")
 
 # --- Load document and create vectorstore only once --- #
 if "vectordb" not in st.session_state:
     try:
         file_dir = os.path.dirname(os.path.abspath(__file__))
-        filepath = os.path.join(file_dir, "FAST_Workshop.docx")  # ✅ Local file in same repo
+        filepath = os.path.join(file_dir, "FAST_Workshop.docx")  
 
         text = load_docx_from_path(filepath)
 
@@ -75,7 +85,7 @@ if "vectordb" not in st.session_state:
             st.warning("No extractable text found in document.")
             st.stop()
 
-        st.success("✅ Document loaded successfully.")
+        st.success(" Document loaded successfully.")
         docs = split_text(text)
         st.session_state.vectordb = create_vectorstore(docs)
         st.session_state.chat_history = []
