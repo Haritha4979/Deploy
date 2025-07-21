@@ -77,7 +77,7 @@ Question:
 
 # --- Streamlit UI ---
 st.set_page_config(page_title=" Chat with Your Document", layout="centered")
-st.title(" Chat with Your Document (Google Gemini)")
+st.title(" Chat with Your Document")
 
 if st.button("Upload another file", key="reset_file"):
     st.session_state.clear()
