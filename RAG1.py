@@ -6,7 +6,7 @@ import nest_asyncio
 import time
 from docx import Document
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import AzureOpenAIEmbeddings
 from langchain.chat_models import AzureChatOpenAI
@@ -40,12 +40,10 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 def split_text(text):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
-        chunk_overlap=200,
-        separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""]
+        chunk_overlap=200
     )
     docs = splitter.create_documents([text])
     return [doc.page_content for doc in docs]
-
 
 # --- Vectorstore from docs --- #
 def create_vectorstore(texts):
