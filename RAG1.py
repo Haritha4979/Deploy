@@ -12,7 +12,6 @@ from langchain_community.embeddings import AzureOpenAIEmbeddings
 from langchain.chat_models import AzureChatOpenAI
 from google.api_core.exceptions import ResourceExhausted
 
-# --- Patch asyncio to avoid 'no event loop' error --- #
 nest_asyncio.apply()
 try:
     asyncio.get_event_loop()
@@ -30,16 +29,15 @@ if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_KEY:
     st.error("❌ Azure OpenAI credentials missing in .env or Streamlit Secrets.")
     st.stop()
 
-# --- ✅ Add this function: Load DOCX from local path --- #
+# --- Load DOCX from local path --- #
 def load_docx_from_path(path):
     doc = Document(path)
     return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
 
-# --- ✅ Keep only ONE split_text function --- #
+# --- Split text into chunks --- #
 def split_text(text):
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    documents = splitter.create_documents([text])
-    return [doc.page_content for doc in documents]
+    splitter = RecursiveCharacterTextSplitter()
+    return splitter.split_text(text)
 
 # --- Vectorstore from docs --- #
 def create_vectorstore(texts):
