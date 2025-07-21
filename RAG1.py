@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from docx import Document
 
 from langchain_openai import AzureOpenAIEmbeddings, AzureChatOpenAI
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.chains import ConversationalRetrievalChain
 
@@ -16,12 +16,11 @@ api_version = os.getenv("AZURE_OPENAI_API_VERSION")
 embedding_model = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
 chat_model = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT")
 
-# UI config
+# UI
 st.set_page_config(page_title="📄 Chat with FAST Workshop", layout="centered")
 st.title("💬 Chatbot on FAST_Workshop.docx using Azure GPT-4o-mini")
 
-# Load and embed document
-@st.cache_data
+@st.cache_resource
 def load_and_embed_doc(path):
     doc = Document(path)
     text = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
@@ -38,10 +37,9 @@ def load_and_embed_doc(path):
         api_version=api_version,
         deployment=embedding_model,
     )
-    vectordb = Chroma.from_documents(docs, embedding=embeddings)
+    vectordb = FAISS.from_documents(docs, embedding=embeddings)
     return vectordb
 
-# Load vectorstore
 try:
     file_path = os.path.join(os.path.dirname(__file__), "FAST_Workshop.docx")
     vectordb = load_and_embed_doc(file_path)
