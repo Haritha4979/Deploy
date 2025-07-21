@@ -36,17 +36,17 @@ def load_docx_from_path(path):
 
 # --- Split text into chunks --- #
 def split_text(text):
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    return splitter.create_documents([text])
+    splitter = RecursiveCharacterTextSplitter()
+    return splitter.split_text(text)
 
 # --- Vectorstore from docs --- #
-def create_vectorstore(docs):
+def create_vectorstore(texts):
     embeddings = AzureOpenAIEmbeddings(
         azure_endpoint=AZURE_OPENAI_ENDPOINT,
         api_key=AZURE_OPENAI_KEY,
         deployment=AZURE_OPENAI_MODEL
     )
-    return FAISS.from_documents(docs, embedding=embeddings)
+    return FAISS.from_texts(texts, embedding=embeddings)
 
 # --- RAG Query --- #
 def get_answer(vectorstore, query):
@@ -103,8 +103,8 @@ if "vectordb" not in st.session_state:
             st.stop()
 
         st.success("✅ Document loaded successfully.")
-        docs = split_text(text)
-        st.session_state.vectordb = create_vectorstore(docs)
+        texts = split_text(text)
+        st.session_state.vectordb = create_vectorstore(texts)
         st.session_state.chat_history = []
 
     except Exception as e:
