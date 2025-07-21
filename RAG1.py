@@ -30,9 +30,12 @@ if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_KEY:
     st.stop()
 
 # --- Load DOCX from local path --- #
-def load_docx_from_path(path):
-    doc = Document(path)
-    return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+def split_text(text):
+    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+        chunk_size=1000, chunk_overlap=200
+    )
+    documents = splitter.create_documents([text])
+    return [doc.page_content for doc in documents]
 
 # --- Split text into chunks --- #
 def split_text(text):
