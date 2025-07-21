@@ -2,74 +2,99 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 from docx import Document
+import nest_asyncio
+import asyncio
 
-from langchain_openai import AzureOpenAIEmbeddings, AzureChatOpenAI
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.chains import ConversationalRetrievalChain
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 
-# Load environment
-load_dotenv()
-endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-api_key = os.getenv("AZURE_OPENAI_API_KEY")
-api_version = os.getenv("AZURE_OPENAI_API_VERSION")
-embedding_model = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
-chat_model = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT")
-
-# UI
-st.set_page_config(page_title="📄 Chat with FAST Workshop", layout="centered")
-st.title("💬 Chatbot on FAST_Workshop.docx using Azure GPT-4o-mini")
-
-@st.cache_resource
-def load_and_embed_doc(path):
-    doc = Document(path)
-    text = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
-
-    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-        chunk_size=500,
-        chunk_overlap=50,
-    )
-    docs = splitter.create_documents([text])
-
-    embeddings = AzureOpenAIEmbeddings(
-        azure_endpoint=endpoint,
-        api_key=api_key,
-        api_version=api_version,
-        deployment=embedding_model,
-    )
-    vectordb = FAISS.from_documents(docs, embedding=embeddings)
-    return vectordb
-
+# --- Fix asyncio for Streamlit
+nest_asyncio.apply()
 try:
-    file_path = os.path.join(os.path.dirname(__file__), "FAST_Workshop.docx")
-    vectordb = load_and_embed_doc(file_path)
+    asyncio.get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
 
-    llm = AzureChatOpenAI(
-        azure_endpoint=endpoint,
-        api_key=api_key,
-        api_version=api_version,
-        deployment_name=chat_model,
-    )
+# --- Load API Key
+load_dotenv()
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+if not GOOGLE_API_KEY:
+    st.error("❌ Google API Key missing in .env or Streamlit secrets.")
+    st.stop()
 
-    qa = ConversationalRetrievalChain.from_llm(llm=llm, retriever=vectordb.as_retriever())
+# --- Load built-in docx
+def load_docx():
+    filepath = os.path.join(os.path.dirname(__file__), "FAST_Workshop.docx")
+    doc = Document(filepath)
+    return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
 
-    if "chat_history" not in st.session_state:
+# --- Split text into chunks
+def split_text(text):
+    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(chunk_size=1000, chunk_overlap=200)
+    return splitter.create_documents([text])
+
+# --- Create FAISS vector store
+def create_vectorstore(docs):
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=GOOGLE_API_KEY)
+    return FAISS.from_documents(docs, embedding=embeddings)
+
+# --- Get answer from Gemini
+def get_answer(vectorstore, query):
+    retriever = vectorstore.as_retriever(search_type="similarity", k=5)
+    docs = retriever.invoke(query)
+    context = "\n\n".join(doc.page_content for doc in docs)
+
+    prompt = f"""
+You are a helpful assistant. Use the following context to answer the question.
+
+Instructions:
+- Respond in markdown.
+- Use **bold** for important words and bullets for clarity.
+- If no info is available in the context, say so.
+
+Context:
+{context}
+
+Question:
+{query}
+"""
+    model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GOOGLE_API_KEY)
+    return model.invoke(prompt).content
+
+# --- Streamlit UI
+st.set_page_config(page_title="📄 Gemini RAG Chatbot", layout="centered")
+st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
+
+if "vectordb" not in st.session_state:
+    try:
+        text = load_docx()
+        if not text.strip():
+            st.warning("Document is empty.")
+            st.stop()
+        docs = split_text(text)
+        st.session_state.vectordb = create_vectorstore(docs)
         st.session_state.chat_history = []
+        st.success("✅ Document loaded successfully.")
+    except Exception as e:
+        st.error(f"Error loading document: {e}")
+        st.stop()
 
+if "vectordb" in st.session_state:
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    user_input = st.chat_input("Ask a question about the FAST Workshop document...")
+    user_input = st.chat_input("Ask a question about the document...")
     if user_input:
-        st.chat_message("user").markdown(user_input)
         st.session_state.chat_history.append({"role": "user", "content": user_input})
-
+        with st.chat_message("user"):
+            st.markdown(user_input)
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                result = qa.run({"question": user_input, "chat_history": st.session_state.chat_history})
-                st.markdown(result["answer"])
-                st.session_state.chat_history.append({"role": "assistant", "content": result["answer"]})
-
-except Exception as e:
-    st.error(f"❌ Error: {e}")
+                try:
+                    answer = get_answer(st.session_state.vectordb, user_input)
+                    st.markdown(answer)
+                    st.session_state.chat_history.append({"role": "assistant", "content": answer})
+                except Exception as e:
+                    st.error(f"Error: {e}")

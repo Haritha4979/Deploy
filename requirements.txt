@@ -2,7 +2,7 @@ streamlit
 python-docx
 python-dotenv
 langchain
-langchain-openai
 langchain-community
+langchain-google-genai
 langchain-text-splitters
 faiss-cpu
