@@ -2,27 +2,33 @@ import os
 import asyncio
 import streamlit as st
 from dotenv import load_dotenv
+from docx import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from docx import Document
 
 # --- Load Gemini API Key --- #
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 if not GOOGLE_API_KEY:
-    st.error("Google API Key missing in .env or Streamlit Secrets.")
+    st.error("❌ Google API Key missing in .env or Streamlit Secrets.")
     st.stop()
 
-# --- Async-safe wrapper --- #
-def safe_invoke(coro):
+# --- Fix for async calls inside Streamlit thread --- #
+def run_async(coro):
     try:
         loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Running inside another loop (like Streamlit) — create a new loop
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            return new_loop.run_until_complete(coro)
+        return loop.run_until_complete(coro)
     except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop.run_until_complete(coro)
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        return new_loop.run_until_complete(coro)
 
 # --- Load DOCX from local path --- #
 def load_docx_from_path(path):
@@ -42,8 +48,8 @@ def create_vectorstore(docs):
     )
     return Chroma.from_documents(docs, embeddings, collection_name="doc_collection")
 
-# --- RAG Query --- #
-def get_answer(vectorstore, query):
+# --- Gemini RAG Query --- #
+async def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
     docs = retriever.invoke(query)
 
@@ -66,18 +72,18 @@ Question:
         model="gemini-pro",
         google_api_key=GOOGLE_API_KEY
     )
-    response = safe_invoke(model.ainvoke(prompt))  
+    response = await model.ainvoke(prompt)
     return response.content
 
 # --- Streamlit UI --- #
-st.set_page_config(page_title=" Chat with  Document", layout="centered")
-st.title(" Chat with document")
+st.set_page_config(page_title="📄 Chat with FAST Document", layout="centered")
+st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
 
 # --- Load document and create vectorstore only once --- #
 if "vectordb" not in st.session_state:
     try:
         file_dir = os.path.dirname(os.path.abspath(__file__))
-        filepath = os.path.join(file_dir, "FAST_Workshop.docx")  
+        filepath = os.path.join(file_dir, "FAST_Workshop.docx")  # Ensure the file is in your project root
 
         text = load_docx_from_path(filepath)
 
@@ -85,7 +91,7 @@ if "vectordb" not in st.session_state:
             st.warning("No extractable text found in document.")
             st.stop()
 
-        st.success(" Document loaded successfully.")
+        st.success("✅ Document loaded successfully.")
         docs = split_text(text)
         st.session_state.vectordb = create_vectorstore(docs)
         st.session_state.chat_history = []
@@ -109,7 +115,7 @@ if "vectordb" in st.session_state:
         with st.chat_message("assistant"):
             with st.spinner("Reading document..."):
                 try:
-                    answer = get_answer(st.session_state.vectordb, user_input)
+                    answer = run_async(get_answer(st.session_state.vectordb, user_input))
                     st.markdown(answer)
                     st.session_state.chat_history.append({"role": "assistant", "content": answer})
                 except Exception as e:
