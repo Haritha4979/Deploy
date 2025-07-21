@@ -94,7 +94,12 @@ if "vectordb" not in st.session_state:
                 model="models/embedding-001",
                 google_api_key=GOOGLE_API_KEY
             )
-
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
             vectordb = FAISS.from_texts(texts, embedding=embeddings, metadatas=metadatas)
             st.session_state.vectordb = vectordb
             st.success("✅ Document indexed successfully!")
