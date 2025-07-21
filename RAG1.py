@@ -9,7 +9,7 @@ from langchain_google_genai.embeddings import GoogleGenerativeAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # === Set your Google Gemini API key ===
-GOOGLE_API_KEY = "AIzaSyDqhfgfkvTNkwj5RNMYKegm0bFEirr3IiQ"  # Replace with your actual key
+GOOGLE_API_KEY = "AIzaSyD3UwN3fSrWWyz7FrQVz48jUYHeDdll6x4"  # Replace with your actual key
 
 # === Ensure valid API key ===
 if not GOOGLE_API_KEY or "AIzaSy" not in GOOGLE_API_KEY:
@@ -99,7 +99,7 @@ if "vectordb" not in st.session_state:
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                
+
             vectordb = FAISS.from_texts(texts, embedding=embeddings, metadatas=metadatas)
             st.session_state.vectordb = vectordb
             st.success("✅ Document indexed successfully!")
