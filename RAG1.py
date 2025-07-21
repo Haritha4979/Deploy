@@ -3,16 +3,14 @@ import streamlit as st
 from dotenv import load_dotenv
 import asyncio
 import nest_asyncio
-import time
 from docx import Document
+import google.generativeai as genai
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_openai import AzureOpenAIEmbeddings
-from langchain_community.chat_models import AzureChatOpenAI
-from google.api_core.exceptions import ResourceExhausted
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-# Apply async patch
+# --- Async patch for nested loops
 nest_asyncio.apply()
 try:
     asyncio.get_event_loop()
@@ -20,45 +18,38 @@ except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-# --- Load Azure credentials --- #
+# --- Load environment variables
 load_dotenv()
-AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
-AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
-AZURE_OPENAI_MODEL = os.getenv("AZURE_OPENAI_MODEL", "gpt-4o-mini")
-AZURE_OPENAI_EMBEDDING_MODEL = os.getenv("AZURE_OPENAI_EMBEDDING_MODEL", "text-embedding-ada-002")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Validate credentials
-if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_KEY:
-    st.error("❌ Azure OpenAI credentials missing in .env or Streamlit Secrets.")
+if not GEMINI_API_KEY:
+    st.error("❌ Google Gemini API key missing in .env or Streamlit secrets.")
     st.stop()
 
-# --- Load DOCX --- #
+# --- Configure Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+
+# --- Load DOCX
 def load_docx_from_path(path):
     doc = Document(path)
     return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
 
-# --- Split into chunks --- #
+# --- Split into chunks
 def split_text(text):
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     docs = splitter.create_documents([text])
     return [doc.page_content for doc in docs]
 
-# --- Vectorstore with correct embedding model --- #
+# --- Vector store with Gemini Embeddings
 def create_vectorstore(texts):
-    embeddings = AzureOpenAIEmbeddings(
-        azure_endpoint=AZURE_OPENAI_ENDPOINT,
-        api_key=AZURE_OPENAI_KEY,
-        deployment=AZURE_OPENAI_EMBEDDING_MODEL,
-        model=AZURE_OPENAI_EMBEDDING_MODEL,
-        api_version="2024-02-15-preview"
-    )
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=GEMINI_API_KEY)
     return FAISS.from_texts(texts, embedding=embeddings)
 
-# --- RAG-style query --- #
+# --- Gemini RAG-style query
 def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
     docs = retriever.invoke(query)
-
+    
     context = "\n\n".join([doc.page_content for doc in docs])
     prompt = f"""
 You are a helpful assistant. Use the context below to answer the user's question.
@@ -74,36 +65,21 @@ Context:
 Question:
 {query}
 """
-    model = AzureChatOpenAI(
-        openai_api_key=AZURE_OPENAI_KEY,
-        azure_endpoint=AZURE_OPENAI_ENDPOINT,
-        deployment_name=AZURE_OPENAI_MODEL,
-        api_version="2024-02-15-preview"
-    )
 
-    try:
-        response = model.invoke(prompt)
-    except ResourceExhausted as e:
-        if "quota" in str(e):
-            time.sleep(11)
-            response = model.invoke(prompt)
-        else:
-            raise e
+    model = genai.GenerativeModel("gemini-1.5-pro")
+    response = model.generate_content(prompt)
+    return response.text
 
-    return response.content
-
-# --- Streamlit UI --- #
+# --- Streamlit UI
 st.set_page_config(page_title="📄 Chat with FAST Document", layout="centered")
-st.title("📄 Chat with FAST_Workshop.docx (Azure OpenAI RAG)")
+st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
 
-# --- Load document and create vectorstore only once --- #
 if "vectordb" not in st.session_state:
     try:
         file_dir = os.path.dirname(os.path.abspath(__file__))
         filepath = os.path.join(file_dir, "FAST_Workshop.docx")
 
         text = load_docx_from_path(filepath)
-
         if not text.strip():
             st.warning("No extractable text found in document.")
             st.stop()
@@ -117,7 +93,7 @@ if "vectordb" not in st.session_state:
         st.error(f"Error loading document: {e}")
         st.stop()
 
-# --- Chat Interface --- #
+# --- Chat interface
 if "vectordb" in st.session_state:
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
