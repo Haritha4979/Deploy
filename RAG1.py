@@ -9,14 +9,15 @@ from langchain.chat_models import AzureChatOpenAI
 from docx import Document
 import PyPDF2
 
-# --- Load API Keys ---
+# --- Load Azure OpenAI Credentials ---
 load_dotenv()
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT") or st.secrets.get("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY") or st.secrets.get("AZURE_OPENAI_KEY")
-AZURE_OPENAI_MODEL = os.getenv("AZURE_OPENAI_MODEL") or st.secrets.get("AZURE_OPENAI_MODEL")
+AZURE_OPENAI_CHAT_MODEL = os.getenv("AZURE_OPENAI_CHAT_MODEL") or st.secrets.get("AZURE_OPENAI_CHAT_MODEL")
+AZURE_OPENAI_EMBEDDING_MODEL = os.getenv("AZURE_OPENAI_EMBEDDING_MODEL") or st.secrets.get("AZURE_OPENAI_EMBEDDING_MODEL")
 
-if not AZURE_OPENAI_KEY or not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_MODEL:
-    st.error("❌ Azure OpenAI credentials missing. Add them to .env or Streamlit Secrets.")
+if not all([AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY, AZURE_OPENAI_CHAT_MODEL, AZURE_OPENAI_EMBEDDING_MODEL]):
+    st.error("❌ Missing Azure OpenAI credentials in .env or Streamlit Secrets.")
     st.stop()
 
 # --- File Loaders ---
@@ -35,18 +36,19 @@ def split_text(text):
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     return splitter.create_documents([text])
 
-# --- Vectorstore with Azure OpenAI Embeddings ---
+# --- Vectorstore ---
 def create_vectorstore(docs):
     embeddings = OpenAIEmbeddings(
         openai_api_type="azure",
         openai_api_key=AZURE_OPENAI_KEY,
         openai_api_base=AZURE_OPENAI_ENDPOINT,
         openai_api_version="2024-05-13",
-        deployment=AZURE_OPENAI_MODEL,
+        deployment=AZURE_OPENAI_EMBEDDING_MODEL,
+        model="text-embedding-ada-002"
     )
     return FAISS.from_documents(docs, embeddings)
 
-# --- RAG-based Answer ---
+# --- Get Answer from RAG ---
 def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
     docs = retriever.invoke(query)
@@ -66,8 +68,9 @@ Context:
 Question:
 {query}
 """
+
     model = AzureChatOpenAI(
-        deployment_name=AZURE_OPENAI_MODEL,
+        deployment_name=AZURE_OPENAI_CHAT_MODEL,
         openai_api_key=AZURE_OPENAI_KEY,
         openai_api_base=AZURE_OPENAI_ENDPOINT,
         openai_api_version="2024-05-13",
@@ -77,9 +80,8 @@ Question:
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="📄 Chat with Your Document", layout="centered")
-st.title("📄 Chat with Your Document using Azure GPT-4o-mini")
+st.title("📄 Chat with Your Document (Azure GPT-4)")
 
-# --- Reset Option ---
 if st.button("🔁 Upload another file", key="reset_file"):
     st.session_state.clear()
     st.rerun()
