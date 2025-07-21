@@ -71,6 +71,12 @@ Question:
 st.set_page_config(page_title="📄 Chat with Your Document", layout="centered")
 st.title("📄 Chat with Your Document using Gemini")
 
+# --- Reset Option ---
+if st.button("🔁 Upload another file", key="reset_file"):
+    st.session_state.clear()
+    st.rerun()
+
+# --- File Upload ---
 if "vectordb" not in st.session_state:
     uploaded_file = st.file_uploader("Upload PDF, DOCX, or TXT file", type=["pdf", "docx", "txt"])
 
