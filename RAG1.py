@@ -32,6 +32,8 @@ def create_vectorstore(docs):
     )
     return Chroma.from_documents(docs, embeddings, collection_name="doc_collection")
 
+import asyncio
+
 # --- RAG Query --- #
 def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
