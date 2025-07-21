@@ -70,7 +70,7 @@ Question:
 
 # --- Streamlit UI --- #
 st.set_page_config(page_title="📄 Chat with FAST Document", layout="centered")
-st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
+st.title("📄 Chat with document")
 
 # --- Load document and create vectorstore only once --- #
 if "vectordb" not in st.session_state:
