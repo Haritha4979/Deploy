@@ -2,23 +2,21 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 
 from docx import Document
-import pandas as pd
 import PyPDF2
-import tempfile
 
-# Load from .env or Streamlit Secrets
+# --- Load API Key ---
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 if not GEMINI_API_KEY:
-    st.error("❌ Missing Google Gemini API Key. Please set `GEMINI_API_KEY` in .env or Streamlit Secrets.")
+    st.error("❌ Google Gemini API Key missing. Add it to .env or Streamlit Secrets.")
     st.stop()
 
-# -------- Loaders -------- #
+# --- File Loaders ---
 def load_txt(file): return file.read().decode("utf-8")
 
 def load_docx(file):
@@ -29,12 +27,12 @@ def load_pdf(file):
     pdf = PyPDF2.PdfReader(file)
     return "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
 
-# -------- Split text into chunks -------- #
+# --- Text Chunking ---
 def split_text(text):
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     return splitter.create_documents([text])
 
-# -------- Create vectorstore using FAISS -------- #
+# --- Vectorstore with Gemini Embeddings ---
 def create_vectorstore(docs):
     embeddings = GoogleGenerativeAIEmbeddings(
         model="models/embedding-001",
@@ -42,7 +40,7 @@ def create_vectorstore(docs):
     )
     return FAISS.from_documents(docs, embeddings)
 
-# -------- RAG Q&A -------- #
+# --- RAG-based Answer ---
 def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
     docs = retriever.invoke(query)
@@ -52,9 +50,9 @@ def get_answer(vectorstore, query):
 You are a helpful assistant. Use the context below to answer the user's question.
 
 Instructions:
-- Write clearly in markdown.
-- Use **bold** for key points and bullets or numbers where useful.
-- Keep answers concise and grounded in the document.
+- Respond clearly in markdown.
+- Highlight key points with **bold**, and use bullets or steps if useful.
+- Keep answers concise and relevant to the context.
 
 Context:
 {context}
@@ -69,12 +67,12 @@ Question:
     response = model.invoke(prompt)
     return response.content
 
-# -------- Streamlit UI -------- #
-st.set_page_config(page_title="📄 Chat with Your File", layout="centered")
-st.title("📄 Chat with Your Document")
+# --- Streamlit UI ---
+st.set_page_config(page_title="📄 Chat with Your Document", layout="centered")
+st.title("📄 Chat with Your Document using Gemini")
 
 if "vectordb" not in st.session_state:
-    uploaded_file = st.file_uploader("Upload a file (PDF, DOCX, or TXT)", type=["pdf", "docx", "txt"])
+    uploaded_file = st.file_uploader("Upload PDF, DOCX, or TXT file", type=["pdf", "docx", "txt"])
 
     if uploaded_file:
         try:
@@ -93,7 +91,7 @@ if "vectordb" not in st.session_state:
                 st.warning("No extractable text found.")
                 st.stop()
 
-            st.success("✅ File loaded successfully.")
+            st.success("✅ File loaded.")
             docs = split_text(text)
             st.session_state.vectordb = create_vectorstore(docs)
             st.session_state.chat_history = []
@@ -103,13 +101,13 @@ if "vectordb" not in st.session_state:
             st.error(f"Error loading file: {e}")
             st.stop()
 
-# -------- Chat Interface -------- #
+# --- Chat UI ---
 if "vectordb" in st.session_state:
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    user_input = st.chat_input("Ask a question about the uploaded document...")
+    user_input = st.chat_input("Ask about your document...")
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
