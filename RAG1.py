@@ -6,12 +6,13 @@ import nest_asyncio
 import time
 from docx import Document
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_openai import AzureOpenAIEmbeddings
 from langchain_community.chat_models import AzureChatOpenAI
 from google.api_core.exceptions import ResourceExhausted
 
+# Apply async patch
 nest_asyncio.apply()
 try:
     asyncio.get_event_loop()
@@ -19,42 +20,41 @@ except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-# --- Load Azure OpenAI credentials --- #
+# --- Load Azure credentials --- #
 load_dotenv()
-AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT") or st.secrets.get("AZURE_OPENAI_ENDPOINT")
-AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY") or st.secrets.get("AZURE_OPENAI_KEY")
-AZURE_OPENAI_MODEL = os.getenv("AZURE_OPENAI_MODEL") or st.secrets.get("AZURE_OPENAI_MODEL", "gpt-4o-mini")
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
+AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
+AZURE_OPENAI_MODEL = os.getenv("AZURE_OPENAI_MODEL", "gpt-4o-mini")
+AZURE_OPENAI_EMBEDDING_MODEL = os.getenv("AZURE_OPENAI_EMBEDDING_MODEL", "text-embedding-ada-002")
 
+# Validate credentials
 if not AZURE_OPENAI_ENDPOINT or not AZURE_OPENAI_KEY:
     st.error("❌ Azure OpenAI credentials missing in .env or Streamlit Secrets.")
     st.stop()
 
-# --- Load DOCX from local path --- #
+# --- Load DOCX --- #
 def load_docx_from_path(path):
     doc = Document(path)
     return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
 
-# --- Split text into chunks --- #
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-
+# --- Split into chunks --- #
 def split_text(text):
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200
-    )
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     docs = splitter.create_documents([text])
     return [doc.page_content for doc in docs]
 
-# --- Vectorstore from docs --- #
+# --- Vectorstore with correct embedding model --- #
 def create_vectorstore(texts):
     embeddings = AzureOpenAIEmbeddings(
         azure_endpoint=AZURE_OPENAI_ENDPOINT,
         api_key=AZURE_OPENAI_KEY,
-        deployment=AZURE_OPENAI_MODEL
+        deployment=AZURE_OPENAI_EMBEDDING_MODEL,
+        model=AZURE_OPENAI_EMBEDDING_MODEL,
+        api_version="2024-02-15-preview"
     )
     return FAISS.from_texts(texts, embedding=embeddings)
 
-# --- RAG Query --- #
+# --- RAG-style query --- #
 def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
     docs = retriever.invoke(query)
