@@ -20,7 +20,7 @@ except RuntimeError:
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
-    st.error("❌ Google API Key missing in .env or Streamlit secrets.")
+    st.error(" Google API Key missing in .env or Streamlit secrets.")
     st.stop()
 
 # --- Load built-in docx
@@ -65,8 +65,8 @@ Question:
     return model.invoke(prompt).content
 
 # --- Streamlit UI
-st.set_page_config(page_title="📄 Gemini RAG Chatbot", layout="centered")
-st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
+st.set_page_config(page_title=" Chatbot", layout="centered")
+st.title(" Chat with Document")
 
 if "vectordb" not in st.session_state:
     try:
@@ -77,7 +77,7 @@ if "vectordb" not in st.session_state:
         docs = split_text(text)
         st.session_state.vectordb = create_vectorstore(docs)
         st.session_state.chat_history = []
-        st.success("✅ Document loaded successfully.")
+        st.success(" Document loaded successfully.")
     except Exception as e:
         st.error(f"Error loading document: {e}")
         st.stop()
