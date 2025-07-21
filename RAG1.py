@@ -4,11 +4,10 @@ from dotenv import load_dotenv
 import asyncio
 import nest_asyncio
 from docx import Document
-import google.generativeai as genai
-
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain.embeddings import OllamaEmbeddings
+from langchain.llms import Ollama
 
 # --- Async patch for nested loops
 nest_asyncio.apply()
@@ -18,16 +17,8 @@ except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-# --- Load environment variables
+# --- Load .env variables
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-if not GEMINI_API_KEY:
-    st.error("❌ Google Gemini API key missing in .env or Streamlit secrets.")
-    st.stop()
-
-# --- Configure Gemini
-genai.configure(api_key=GEMINI_API_KEY)
 
 # --- Load DOCX
 def load_docx_from_path(path):
@@ -40,16 +31,16 @@ def split_text(text):
     docs = splitter.create_documents([text])
     return [doc.page_content for doc in docs]
 
-# --- Vector store with Gemini Embeddings
+# --- Vectorstore using Ollama embeddings
 def create_vectorstore(texts):
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=GEMINI_API_KEY)
+    embeddings = OllamaEmbeddings(model="llama3")
     return FAISS.from_texts(texts, embedding=embeddings)
 
-# --- Gemini RAG-style query
+# --- LLaMA3 RAG-style QA
 def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
     docs = retriever.invoke(query)
-    
+
     context = "\n\n".join([doc.page_content for doc in docs])
     prompt = f"""
 You are a helpful assistant. Use the context below to answer the user's question.
@@ -66,13 +57,12 @@ Question:
 {query}
 """
 
-    model = genai.GenerativeModel("gemini-1.0-pro")
-    response = model.generate_content(prompt)
-    return response.text
+    llm = Ollama(model="llama3")
+    return llm.invoke(prompt)
 
 # --- Streamlit UI
-st.set_page_config(page_title="📄 Chat with FAST Document", layout="centered")
-st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
+st.set_page_config(page_title="📄 Chat with FAST Document (LLaMA)", layout="centered")
+st.title("📄 Chat with FAST_Workshop.docx (LLaMA RAG)")
 
 if "vectordb" not in st.session_state:
     try:
