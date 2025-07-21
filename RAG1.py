@@ -1,4 +1,5 @@
 import os
+import asyncio
 import streamlit as st
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -15,6 +16,12 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     st.error("❌ Google API Key missing in .env or Streamlit Secrets.")
     st.stop()
+
+# --- Ensure Event Loop ---
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
 
 # --- File Loaders ---
 def load_txt(file): return file.read().decode("utf-8")
