@@ -14,7 +14,7 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
 
 if not GOOGLE_API_KEY:
-    st.error("❌ Google API Key missing in .env or Streamlit Secrets.")
+    st.error(" Google API Key missing in .env or Streamlit Secrets.")
     st.stop()
 
 # --- Ensure Event Loop ---
@@ -76,10 +76,10 @@ Question:
     return response.content
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="📄 Chat with Your Document", layout="centered")
-st.title("📄 Chat with Your Document (Google Gemini)")
+st.set_page_config(page_title=" Chat with Your Document", layout="centered")
+st.title(" Chat with Your Document (Google Gemini)")
 
-if st.button("🔁 Upload another file", key="reset_file"):
+if st.button("Upload another file", key="reset_file"):
     st.session_state.clear()
     st.rerun()
 
@@ -104,7 +104,7 @@ if "vectordb" not in st.session_state:
                 st.warning("No extractable text found.")
                 st.stop()
 
-            st.success("✅ File loaded.")
+            st.success(" File loaded.")
             docs = split_text(text)
             st.session_state.vectordb = create_vectorstore(docs)
             st.session_state.chat_history = []
