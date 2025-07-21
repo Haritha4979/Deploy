@@ -6,6 +6,18 @@ from langchain_community.vectorstores import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from docx import Document
 
+
+import nest_asyncio
+import asyncio
+nest_asyncio.apply()
+
+# Ensure a running event loop
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
 # --- Load Gemini API Key --- #
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
