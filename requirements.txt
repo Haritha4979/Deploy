@@ -1,8 +1,9 @@
 streamlit
 python-dotenv
-python-docx
 langchain
-langchain-community
 langchain-google-genai
+sentence-transformers
 faiss-cpu
 docx2txt
+python-docx
+nest_asyncio
