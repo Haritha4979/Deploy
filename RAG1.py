@@ -1,31 +1,32 @@
 import streamlit as st
 import os
 import asyncio
+
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain_community.vectorstores import FAISS
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_google_genai.embeddings import GoogleGenerativeAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import Docx2txtLoader
 
 
-# Set your Gemini API Key
-GOOGLE_API_KEY = "your_google_api_key"
+# === Set Gemini API Key ===
+GOOGLE_API_KEY = "your_google_api_key"  # <-- Replace with your key
 
-# === Safe async wrapper ===
-def run_async(coro):
+# === Ensure event loop for async gRPC ===
+def ensure_event_loop():
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            new_loop = asyncio.new_event_loop()
-            return new_loop.run_until_complete(coro)
-        return loop.run_until_complete(coro)
+        asyncio.get_running_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        return loop.run_until_complete(coro)
 
-# === Async Gemini answer generator ===
+# === Async wrapper for Streamlit compatibility ===
+def run_async(coro):
+    ensure_event_loop()
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(coro)
+
+# === Async Gemini Q&A ===
 async def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
     docs = retriever.invoke(query)
@@ -46,10 +47,10 @@ Question:
     response = await model.ainvoke(prompt)
     return response.content
 
-# === Load file from code (not user upload) ===
+# === Load local inbuilt document ===
 def load_inbuilt_document():
-    file_path = "FAST_Workshop.docx"  # 👈 Update this to your actual file path
-    suffix = os.path.splitext(file_path)[1]
+    file_path = "FAST_Workshop.docx"  # 👈 Make sure this file exists here
+    suffix = os.path.splitext(file_path)[1].lower()
 
     if suffix == ".pdf":
         loader = PyPDFLoader(file_path)
@@ -63,20 +64,28 @@ def load_inbuilt_document():
 
     return loader.load()
 
-# === Main App ===
+# === Streamlit App ===
 st.title("📘 Ask Questions on Inbuilt Document")
 
+# Initialize vector DB once
 if "vectordb" not in st.session_state:
     with st.spinner("Loading and indexing inbuilt document..."):
         documents = load_inbuilt_document()
         if documents:
             splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
             chunks = splitter.split_documents(documents)
-            embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=GOOGLE_API_KEY)
+
+            ensure_event_loop()  # 🔄 Fix for gRPC
+            embeddings = GoogleGenerativeAIEmbeddings(
+                model="models/embedding-001",
+                google_api_key=GOOGLE_API_KEY
+            )
+
             vectordb = FAISS.from_documents(chunks, embedding=embeddings)
             st.session_state.vectordb = vectordb
-            st.success("Document loaded successfully!")
+            st.success("Document loaded and indexed successfully!")
 
+# Chat UI
 user_input = st.chat_input("Ask a question about the document...")
 if user_input and "vectordb" in st.session_state:
     st.chat_message("user").write(user_input)
