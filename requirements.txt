@@ -5,5 +5,5 @@ faiss-cpu
 python-dotenv
 pandas
 PyPDF2
-docx
+python-docx
 chromadb
