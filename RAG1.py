@@ -36,8 +36,12 @@ def load_docx_from_path(path):
 
 # --- Split text into chunks --- #
 def split_text(text):
-    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder()
-    docs = splitter.create_documents([text], chunk_size=1000, chunk_overlap=200)
+    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+        encoding_name="cl100k_base",  # or "gpt2" if you prefer
+        chunk_size=1000,
+        chunk_overlap=200
+    )
+    docs = splitter.create_documents([text])
     return [doc.page_content for doc in docs]
 
 # --- Vectorstore from docs --- #
