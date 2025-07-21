@@ -1,23 +1,22 @@
 import os
 import streamlit as st
 from dotenv import load_dotenv
+import asyncio
+import nest_asyncio
+
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from docx import Document
 
-
-import nest_asyncio
-import asyncio
 nest_asyncio.apply()
 
-# Ensure a running event loop
 try:
     asyncio.get_event_loop()
 except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    
+
 # --- Load Gemini API Key --- #
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
@@ -42,12 +41,12 @@ def create_vectorstore(docs):
         model="models/embedding-001",
         google_api_key=GOOGLE_API_KEY
     )
-    return Chroma.from_documents(docs, embeddings, collection_name="doc_collection")
+    return FAISS.from_documents(docs, embedding=embeddings)
 
 # --- RAG Query --- #
 def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
-    docs = retriever.invoke(query)  # ✅ sync call, no async loop needed
+    docs = retriever.invoke(query)
 
     context = "\n\n".join([doc.page_content for doc in docs])
     prompt = f"""
@@ -68,7 +67,7 @@ Question:
         model="gemini-pro",
         google_api_key=GOOGLE_API_KEY
     )
-    response = model.invoke(prompt)  # ✅ sync call
+    response = model.invoke(prompt)
     return response.content
 
 # --- Streamlit UI --- #
@@ -78,7 +77,6 @@ st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
 # --- Load document and create vectorstore only once --- #
 if "vectordb" not in st.session_state:
     try:
-        # Safe path to local file
         file_dir = os.path.dirname(os.path.abspath(__file__))
         filepath = os.path.join(file_dir, "FAST_Workshop.docx")
 
