@@ -1,65 +1,36 @@
+import streamlit as st
 import os
 import asyncio
-import streamlit as st
-from dotenv import load_dotenv
-from docx import Document
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
+from langchain_community.vectorstores import FAISS
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai.embeddings import GoogleGenerativeAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from tempfile import NamedTemporaryFile
 
-# --- Load Gemini API Key --- #
-load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+# Set your Gemini API key here
+GOOGLE_API_KEY = "your_google_api_key"
 
-if not GOOGLE_API_KEY:
-    st.error("❌ Google API Key missing in .env or Streamlit Secrets.")
-    st.stop()
-
-# --- Async helper for Streamlit threads --- #
+# === Safe async wrapper ===
 def run_async(coro):
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
             new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
             return new_loop.run_until_complete(coro)
         return loop.run_until_complete(coro)
     except RuntimeError:
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
-        return new_loop.run_until_complete(coro)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(coro)
 
-# --- Load DOCX from local path --- #
-def load_docx_from_path(path):
-    doc = Document(path)
-    return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
-
-# --- Split text into chunks --- #
-def split_text(text):
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    return splitter.create_documents([text])
-
-# --- Vectorstore from docs --- #
-def create_vectorstore(docs):
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001",
-        google_api_key=GOOGLE_API_KEY
-    )
-    return Chroma.from_documents(docs, embeddings, collection_name="doc_collection")
-
-# --- Async RAG Query --- #
+# === Async answer generator ===
 async def get_answer(vectorstore, query):
     retriever = vectorstore.as_retriever(search_type="similarity", k=5)
     docs = retriever.invoke(query)
-
     context = "\n\n".join([doc.page_content for doc in docs])
     prompt = f"""
 You are a helpful assistant. Use the context below to answer the user's question.
-
-Instructions:
-- Write clearly in markdown.
-- Use **bold** for key points and bullets or numbers where useful.
-- Keep answers concise and grounded in the document.
 
 Context:
 {context}
@@ -71,50 +42,51 @@ Question:
         model="gemini-pro",
         google_api_key=GOOGLE_API_KEY
     )
-    response = await model.ainvoke(prompt)  # ✅ async call
+    response = await model.ainvoke(prompt)
     return response.content
 
-# --- Streamlit UI --- #
-st.set_page_config(page_title="📄 Chat with FAST Document", layout="centered")
-st.title("📄 Chat with FAST_Workshop.docx (Gemini RAG)")
+# === Document loader ===
+def load_document(uploaded_file):
+    suffix = os.path.splitext(uploaded_file.name)[1]
+    with NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+        temp_file.write(uploaded_file.read())
+        temp_path = temp_file.name
 
-# --- Load document and create vectorstore only once --- #
-if "vectordb" not in st.session_state:
-    try:
-        file_dir = os.path.dirname(os.path.abspath(__file__))
-        filepath = os.path.join(file_dir, "FAST_Workshop.docx")
+    if suffix == ".pdf":
+        loader = PyPDFLoader(temp_path)
+    elif suffix == ".docx":
+        loader = Docx2txtLoader(temp_path)
+    elif suffix == ".txt":
+        loader = TextLoader(temp_path)
+    else:
+        st.error("Unsupported file type.")
+        return None
 
-        text = load_docx_from_path(filepath)
-        if not text.strip():
-            st.warning("No extractable text found in document.")
-            st.stop()
+    return loader.load()
 
-        st.success("✅ Document loaded successfully.")
-        docs = split_text(text)
-        st.session_state.vectordb = create_vectorstore(docs)
-        st.session_state.chat_history = []
+# === Main App ===
+st.title("📄 Document Q&A with Gemini")
 
-    except Exception as e:
-        st.error(f"Error loading document: {e}")
-        st.stop()
+uploaded_file = st.file_uploader("Upload a PDF, Word or Text file", type=["pdf", "docx", "txt"])
+if uploaded_file:
+    if "vectordb" not in st.session_state:
+        with st.spinner("Loading and indexing document..."):
+            documents = load_document(uploaded_file)
+            if documents:
+                splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+                chunks = splitter.split_documents(documents)
+                embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=GOOGLE_API_KEY)
+                vectordb = FAISS.from_documents(chunks, embedding=embeddings)
+                st.session_state.vectordb = vectordb
+                st.success("Document loaded successfully!")
 
-# --- Chat Interface --- #
-if "vectordb" in st.session_state:
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    user_input = st.chat_input("Ask something about the FAST Workshop document...")
-    if user_input:
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
-
+    user_input = st.chat_input("Ask a question about the document...")
+    if user_input and "vectordb" in st.session_state:
+        st.chat_message("user").write(user_input)
         with st.chat_message("assistant"):
-            with st.spinner("Reading document..."):
+            with st.spinner("Thinking..."):
                 try:
                     answer = run_async(get_answer(st.session_state.vectordb, user_input))
                     st.markdown(answer)
-                    st.session_state.chat_history.append({"role": "assistant", "content": answer})
                 except Exception as e:
                     st.error(f"Error: {e}")
